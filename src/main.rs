@@ -2,7 +2,7 @@ mod themes;
 
 use anyhow::{anyhow, Result};
 use glob::glob;
-use handlebars::Handlebars;
+use handlebars::{Handlebars, JsonValue};
 use pulldown_cmark::Tag::Heading;
 use pulldown_cmark::{html, BrokenLink, Event, HeadingLevel, Options, Parser};
 use serde_json::json;
@@ -74,11 +74,6 @@ fn main() -> Result<()> {
     }
     let outpath = PathBuf::from(outpath.unwrap());
     let path = env::current_dir()?;
-    println!(
-        "The current directory is {} and the outpath is {}",
-        path.display(),
-        outpath.display()
-    );
 
     let mut hbs = Handlebars::new();
     hbs.register_template_string(
@@ -106,10 +101,10 @@ fn main() -> Result<()> {
     let mut index_files = Vec::new();
 
     for path in glob(&g).unwrap().filter_map(Result::ok) {
-        let title = parse(&path)?;
         let mut output_file = outpath.clone();
         let file_name = path.file_name().expect("TODO");
         print!("Found {:?} ", file_name);
+        let title = parse(&path)?;
         let metadata = fs::metadata(file_name)?;
         let time = metadata.modified().unwrap();
 
@@ -121,16 +116,39 @@ fn main() -> Result<()> {
             .render("nota", &json!({ "content": html_output }))
             .expect("TODO");
 
-        println!("{render}");
-
         output_file.push(&filename);
         output_file.set_extension("html");
-        println!("Writing to {:?}", output_file);
-        let mut file = File::create(output_file).unwrap();
+        let mut file = File::create(output_file.clone()).unwrap();
         file.write_all(render.as_bytes()).expect("TODO");
 
-        index_files.push((filename, title, time));
+        let demo = output_file
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        index_files.push((demo, title, time));
     }
+
+    index_files.sort_by(|(_, _, a), (_, _, b)| a.partial_cmp(b).unwrap());
+
+    let mut index_file = outpath.clone();
+    index_file.push("index");
+    index_file.set_extension("html");
+
+    let demo: Vec<JsonValue> = index_files
+        .iter()
+        .map(|nota| json!({"title": nota.1, "link": nota.0}))
+        .collect();
+
+    println!("{:?}", demo);
+
+    let render = hbs
+        .render("index", &json!({ "people": demo }))
+        .expect("TODO");
+
+    let mut file = File::create(index_file).unwrap();
+    file.write_all(&render.as_bytes()).expect("TODO");
 
     Ok(())
 }
