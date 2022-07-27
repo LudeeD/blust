@@ -3,18 +3,20 @@ mod themes;
 use anyhow::{anyhow, Result};
 use glob::glob;
 use handlebars::Handlebars;
-use pulldown_cmark::{html, Options, Parser};
+use pulldown_cmark::Tag::Heading;
+use pulldown_cmark::{html, BrokenLink, Event, HeadingLevel, Options, Parser};
 use serde_json::json;
+use std::path::Path;
 use std::{
     env,
     fs::{self, File},
-    io::Write,
+    io::{Read, Write},
     path::PathBuf,
 };
 
 use themes::{CSS, TEMPLATE_INDEX, TEMPLATE_NOTA};
 
-pub fn parse_to_html(in_path: PathBuf) -> Result<String> {
+fn parse_to_html(in_path: PathBuf) -> Result<String> {
     let buffer: String = fs::read_to_string(&in_path)?
         .parse()
         .expect("TODO remove expects");
@@ -24,6 +26,43 @@ pub fn parse_to_html(in_path: PathBuf) -> Result<String> {
     let mut html_output = String::new();
     html::push_html(&mut html_output, parser);
     Ok(html_output)
+}
+
+pub fn parse(in_file: &Path) -> Result<String> {
+    println!("Parsing...");
+
+    let mut title: Option<String> = None;
+    let mut last_event = None;
+    let mut buffer = String::new();
+    let mut in_file = File::open(in_file)?;
+    in_file.read_to_string(&mut buffer).expect("#TODO change");
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+
+    // Setup callback that sets the URL and title when it encounters
+    // a reference to our home page.
+    let callback = &mut |_broken_link: BrokenLink| {
+        println!("#TODO, need to handle links");
+        None
+    };
+    let parser = Parser::new_with_broken_link_callback(&buffer, options, Some(callback));
+    for element in parser {
+        match &element {
+            Event::Start(Heading(HeadingLevel::H1, _, _)) => {
+                last_event = Some(element);
+            }
+            Event::Text(t) => {
+                if let Some(Event::Start(Heading(HeadingLevel::H1, _, _))) = last_event {
+                    if title.is_none() {
+                        title = Some(t.to_string());
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
+    println!("title => {:?}", title);
+    title.ok_or_else(|| anyhow!("could not find title"))
 }
 
 fn main() -> Result<()> {
@@ -64,7 +103,10 @@ fn main() -> Result<()> {
 
     let g = format!("{}/**/*.md", path.display());
 
+    let mut index_files = Vec::new();
+
     for path in glob(&g).unwrap().filter_map(Result::ok) {
+        let title = parse(&path)?;
         let mut output_file = outpath.clone();
         let file_name = path.file_name().expect("TODO");
         print!("Found {:?} ", file_name);
@@ -81,11 +123,13 @@ fn main() -> Result<()> {
 
         println!("{render}");
 
-        output_file.push(filename);
+        output_file.push(&filename);
         output_file.set_extension("html");
         println!("Writing to {:?}", output_file);
         let mut file = File::create(output_file).unwrap();
-        file.write_all(&render.as_bytes()).expect("TODO");
+        file.write_all(render.as_bytes()).expect("TODO");
+
+        index_files.push((filename, title, time));
     }
 
     Ok(())
