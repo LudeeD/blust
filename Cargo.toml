@@ -2,8 +2,14 @@
 name = "blust"
 version = "0.1.0"
 edition = "2021"
+authors = ["Luís Silva <luiscomsnofim@gmail.com>"]
+description = "another static blog generator"
+documentation = "https://github.com/LudeeD/blust"
+homepage = "https://github.com/LudeeD/blust"
+repository = "https://github.com/LudeeD/blust"
+keywords = ["static", "generator", "cli"]
+license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 glob = "0.3.0"
