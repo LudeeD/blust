@@ -10,23 +10,28 @@
 
 <body>
     <div class="row">
-        <span><b>Last Update:</b>{{time}}</span>
-        <span style="float: right;"><a href="{{about}}">About me 👋</a></span>
+        <span><b>Last Update:</b> {{modified}}</span>
+        <span style="float: right;"><a href="/index.html">Back to index 🏠</a></span>
     </div>
     <hr>
+    {{{content}}}
 
-    <h2>Entries:</h2>
-    <ul>
-        {{#each entry}}
-        <li><a href="{{link}}">{{title}}</a></li>
-        {{/each}}
-    </ul>
+    <br />
 </body>
 <footer>
-    <div class=" row">
+    <div class="row">
         <span>Made with <a href="https://github.com/LudeeD/blust">Blust</a></span>
         <span style="float: right;"><a href="#top">To the top ⬆️</a></span>
     </div>
 </footer>
+
+<style>
+    .row {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+</style>
 
 </html>

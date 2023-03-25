@@ -1,6 +1,8 @@
 mod themes;
 
 use anyhow::{anyhow, Result};
+use chrono::offset::Utc;
+use chrono::DateTime;
 use glob::glob;
 use handlebars::{Handlebars, JsonValue};
 use pulldown_cmark::Tag::Heading;
@@ -13,6 +15,7 @@ use std::{
     io::{Read, Write},
     path::PathBuf,
 };
+use toml_edit::{value, Document};
 
 use themes::{CSS, TEMPLATE_INDEX, TEMPLATE_NOTA};
 
@@ -65,6 +68,27 @@ pub fn parse(in_file: &Path) -> Result<String> {
     title.ok_or_else(|| anyhow!("could not find title"))
 }
 
+#[derive(Debug)]
+struct BlustConfig {
+    title: String,
+    about: String,
+}
+
+fn get_config(path: &PathBuf) -> Result<BlustConfig> {
+    let mut config_file = path.clone();
+    config_file.push("blust.toml");
+    let mut file = File::open(config_file)?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    let doc = contents.parse::<Document>().expect("invalid doc");
+    let config = BlustConfig {
+        title: doc["title"].as_str().unwrap().to_string(),
+        about: doc["about"].as_str().unwrap().to_string(),
+    };
+    println!("Config: {}", contents);
+    Ok(config)
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let outpath = args.get(1);
@@ -74,6 +98,8 @@ fn main() -> Result<()> {
     }
     let outpath = PathBuf::from(outpath.unwrap());
     let path = env::current_dir()?;
+
+    let config = get_config(&path)?;
 
     let mut hbs = Handlebars::new();
     hbs.register_template_string(
@@ -107,13 +133,18 @@ fn main() -> Result<()> {
         let title = parse(&path)?;
         let metadata = fs::metadata(file_name)?;
         let time = metadata.modified().unwrap();
+        let datetime: DateTime<Utc> = time.into();
+        let date_text = datetime.format("%d/%m/%Y %T").to_string();
 
         let filename = path.clone();
         let filename = filename.file_name().unwrap().to_owned();
 
         let html_output = parse_to_html(path).unwrap();
         let render = hbs
-            .render("nota", &json!({ "content": html_output }))
+            .render(
+                "nota",
+                &json!({ "content": html_output, "modified": date_text, "title": &config.title }),
+            )
             .expect("TODO");
 
         output_file.push(&filename);
@@ -144,7 +175,10 @@ fn main() -> Result<()> {
     println!("{:?}", demo);
 
     let render = hbs
-        .render("index", &json!({ "people": demo }))
+        .render(
+            "index",
+            &json!({ "entry": demo, "title": &config.title, "about": &config.about }),
+        )
         .expect("TODO");
 
     let mut file = File::create(index_file).unwrap();
